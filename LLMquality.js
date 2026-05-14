@@ -28,12 +28,6 @@ const upload = multer({
     }
 });
 
-// Store uploaded files temporarily
-let uploadedFiles = {
-    gedcom: null,
-    xml: null
-};
-
 // Middleware
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -80,87 +74,25 @@ function fixFilenameEncoding(filename) {
     }
 }
 
-// API route to handle GEDCOM file upload
-app.post('/api/upload-gedcom', upload.single('gedcom'), (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({
-                success: false,
-                error: 'No file uploaded'
-            });
-        }
-
-        // Fix encoding of the original filename
-        const fixedFilename = fixFilenameEncoding(req.file.originalname);
-
-        // Store the uploaded file info
-        uploadedFiles.gedcom = {
-            originalName: fixedFilename,
-            path: req.file.path,
-            size: req.file.size
-        };
-
-        res.json({
-            success: true,
-            fileName: fixedFilename,
-            message: 'GEDCOM file uploaded successfully'
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: 'Failed to upload GEDCOM file: ' + error.message
-        });
-    }
-});
-
-// API route to handle XML file upload
-app.post('/api/upload-xml', upload.single('xml'), (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({
-                success: false,
-                error: 'No file uploaded'
-            });
-        }
-
-        // Fix encoding of the original filename
-        const fixedFilename = fixFilenameEncoding(req.file.originalname);
-
-        // Store the uploaded file info
-        uploadedFiles.xml = {
-            originalName: fixedFilename,
-            path: req.file.path,
-            size: req.file.size
-        };
-
-        res.json({
-            success: true,
-            fileName: fixedFilename,
-            message: 'XML file uploaded successfully'
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: 'Failed to upload XML file: ' + error.message
-        });
-    }
-});
-
 // API route to handle rating submission
-app.post('/api/rate', async (req, res) => {
+app.post('/api/rate', upload.fields([
+    { name: 'gedcom', maxCount: 1 },
+    { name: 'xml', maxCount: 1 }
+]), async (req, res) => {
+    const gedcomFile = req.files && req.files.gedcom && req.files.gedcom[0];
+    const xmlFile = req.files && req.files.xml && req.files.xml[0];
     try {
-        // Check if both files are uploaded
-        if (!uploadedFiles.gedcom) {
+        if (!gedcomFile) {
             return res.status(400).json({
                 success: false,
-                error: 'Please upload a GEDCOM file first'
+                error: 'Please upload a GEDCOM file'
             });
         }
 
-        if (!uploadedFiles.xml) {
+        if (!xmlFile) {
             return res.status(400).json({
                 success: false,
-                error: 'Please upload an XML file first'
+                error: 'Please upload an XML file'
             });
         }
 
@@ -181,11 +113,10 @@ app.post('/api/rate', async (req, res) => {
         let gedPageModel;
         try {
             const gedReader = new GedReader();
-            const gedModel = gedReader.read(uploadedFiles.gedcom.path);
-            gedPageModel = gedModel.toPageModel(); // Convert GEDCOM to PageModel
-            
-            // Extract and set location from GEDCOM filename
-            gedPageModel.location = extractLocationFromFilename(uploadedFiles.gedcom.originalName);
+            const gedModel = gedReader.read(gedcomFile.path);
+            gedPageModel = gedModel.toPageModel();
+            gedPageModel.location = extractLocationFromFilename(
+                fixFilenameEncoding(gedcomFile.originalname));
         } catch (error) {
             console.error('Error processing GEDCOM file:', error);
             return res.status(500).json({
@@ -198,11 +129,10 @@ app.post('/api/rate', async (req, res) => {
         let xmlPageModel;
         try {
             const xmlReader = new XmlReader();
-            const xmlModel = await xmlReader.readXml(uploadedFiles.xml.path);
+            const xmlModel = await xmlReader.readXml(xmlFile.path);
             xmlPageModel = xmlModel.toPageModel();
-            
-            // Extract and set location from XML filename
-            xmlPageModel.location = extractLocationFromFilename(uploadedFiles.xml.originalName);
+            xmlPageModel.location = extractLocationFromFilename(
+                fixFilenameEncoding(xmlFile.originalname));
         } catch (error) {
             console.error('Error processing XML file:', error);
             return res.status(500).json({
@@ -228,12 +158,9 @@ app.post('/api/rate', async (req, res) => {
 
         // Compare the models and generate results
         const results = await compareModels(gedPageModel, xmlPageModel, {
-            gedcomFile: uploadedFiles.gedcom.originalName,
-            xmlFile: uploadedFiles.xml.originalName
+            gedcomFile: fixFilenameEncoding(gedcomFile.originalname),
+            xmlFile: fixFilenameEncoding(xmlFile.originalname)
         });
-
-        // Clean up uploaded files after processing
-        cleanupUploadedFiles();
 
         res.json({
             success: true,
@@ -246,6 +173,11 @@ app.post('/api/rate', async (req, res) => {
             success: false,
             error: 'Processing failed: ' + error.message
         });
+    } finally {
+        cleanupFiles(
+            gedcomFile && gedcomFile.path,
+            xmlFile && xmlFile.path
+        );
     }
 });
 
@@ -719,19 +651,16 @@ Processing completed successfully.
     `.trim();
 }
 
-// Helper function to clean up uploaded files
-function cleanupUploadedFiles() {
+function cleanupFiles(gedcomPath, xmlPath) {
     try {
-        if (uploadedFiles.gedcom && fs.existsSync(uploadedFiles.gedcom.path)) {
-            fs.unlinkSync(uploadedFiles.gedcom.path);
+        if (gedcomPath && fs.existsSync(gedcomPath)) {
+            fs.unlinkSync(gedcomPath);
         }
-        if (uploadedFiles.xml && fs.existsSync(uploadedFiles.xml.path)) {
-            fs.unlinkSync(uploadedFiles.xml.path);
+        if (xmlPath && fs.existsSync(xmlPath)) {
+            fs.unlinkSync(xmlPath);
         }
-        // Reset the uploaded files
-        uploadedFiles = { gedcom: null, xml: null };
     } catch (error) {
-        console.error('Error cleaning up uploaded files:', error);
+        console.error('Error cleaning up files:', error);
     }
 }
 
