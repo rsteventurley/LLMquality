@@ -376,30 +376,6 @@ document.addEventListener('DOMContentLoaded', function() {
         };
     }
 
-    // Show success message
-    function showSuccess(message) {
-        const successDiv = document.createElement('div');
-        successDiv.className = 'success-message';
-        successDiv.textContent = message;
-        successDiv.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #10b981;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            z-index: 1000;
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-        `;
-        
-        document.body.appendChild(successDiv);
-        
-        setTimeout(() => {
-            document.body.removeChild(successDiv);
-        }, 3000);
-    }
-
     // Show modal
     function showModal(modal) {
         modal.style.display = 'block';
