@@ -64,6 +64,93 @@ describe('LLMquality Server Integration Tests', function() {
         });
     });
 
+    describe('Removed upload endpoints', function() {
+        it('/api/upload-gedcom should no longer exist (404)', function(done) {
+            const postData = '{}';
+            const options = {
+                hostname: serverHost,
+                port: serverPort,
+                path: '/api/upload-gedcom',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(postData)
+                }
+            };
+            const req = http.request(options, (res) => {
+                assert.strictEqual(res.statusCode, 404,
+                    '/api/upload-gedcom should be gone (404)');
+                done();
+            });
+            req.on('error', done);
+            req.write(postData);
+            req.end();
+        });
+
+        it('/api/upload-xml should no longer exist (404)', function(done) {
+            const postData = '{}';
+            const options = {
+                hostname: serverHost,
+                port: serverPort,
+                path: '/api/upload-xml',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(postData)
+                }
+            };
+            const req = http.request(options, (res) => {
+                assert.strictEqual(res.statusCode, 404,
+                    '/api/upload-xml should be gone (404)');
+                done();
+            });
+            req.on('error', done);
+            req.write(postData);
+            req.end();
+        });
+    });
+
+    describe('Atomic upload configuration', function() {
+        it('server should use upload.fields (not upload.single) for /api/rate', function() {
+            const serverContent = fs.readFileSync(
+                path.join(__dirname, '../LLMquality.js'), 'utf8');
+            assert(serverContent.includes('upload.fields('),
+                'LLMquality.js must use upload.fields for /api/rate');
+            assert(!serverContent.includes('uploadedFiles'),
+                'LLMquality.js must not contain the uploadedFiles global');
+        });
+
+        it('/api/rate with no files returns 400 mentioning GEDCOM', function(done) {
+            const boundary = '----LLMTestBoundary';
+            const body = `--${boundary}--\r\n`;
+            const options = {
+                hostname: serverHost,
+                port: serverPort,
+                path: '/api/rate',
+                method: 'POST',
+                headers: {
+                    'Content-Type': `multipart/form-data; boundary=${boundary}`,
+                    'Content-Length': Buffer.byteLength(body)
+                }
+            };
+            const req = http.request(options, (res) => {
+                let data = '';
+                res.on('data', chunk => { data += chunk; });
+                res.on('end', () => {
+                    assert.strictEqual(res.statusCode, 400);
+                    const json = JSON.parse(data);
+                    assert.strictEqual(json.success, false);
+                    assert.ok(json.error.includes('GEDCOM'),
+                        'Error message should mention GEDCOM');
+                    done();
+                });
+            });
+            req.on('error', done);
+            req.write(body);
+            req.end();
+        });
+    });
+
     describe('Method Name Verification', function() {
         it('should confirm server uses correct reader methods', function() {
             // This test verifies the fix is in place
