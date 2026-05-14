@@ -98,30 +98,6 @@ document.addEventListener('DOMContentLoaded', function() {
         };
     }
 
-    // File upload functions
-    async function uploadFile(file, endpoint) {
-        const formData = new FormData();
-        formData.append(endpoint === '/api/upload-gedcom' ? 'gedcom' : 'xml', file);
-        
-        try {
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                body: formData
-            });
-            
-            const result = await response.json();
-            
-            if (!result.success) {
-                throw new Error(result.error || 'Upload failed');
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('Upload error:', error);
-            throw error;
-        }
-    }
-
     // Initialize form
     function initializeForm() {
         updateFormValidation();
@@ -447,19 +423,16 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const formData = {
-            // Form data for API - files are already uploaded
-        };
-
         showLoading();
 
         try {
+            const formData = new FormData();
+            formData.append('gedcom', uploadedFiles.gedcom.file);
+            formData.append('xml', uploadedFiles.xml.file);
+
             const response = await fetch('/api/rate', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(formData)
+                body: formData
             });
 
             const result = await response.json();
@@ -488,108 +461,79 @@ document.addEventListener('DOMContentLoaded', function() {
         xmlFile.click();
     });
 
-    gedcomFile.addEventListener('change', async function(e) {
+    gedcomFile.addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (file) {
-            // Validate file extension
             if (!file.name.toLowerCase().endsWith('.ged')) {
                 showError('❌ Invalid GEDCOM File Extension\n\nGEDCOM files must have a .ged extension.\n\nExample: Tannenkirch.000.ged');
-                e.target.value = ''; // Clear the file input
+                e.target.value = '';
                 return;
             }
 
-            // Validate filename format
             const fileInfo = extractPageNumber(file.name);
             if (!fileInfo) {
                 showError('❌ Invalid GEDCOM Filename Format\n\nGEDCOM filename must follow the pattern:\nbasename.###.ged\n\nExample: Tannenkirch.000.ged\n(where 000 is the 3-digit page number)');
-                e.target.value = ''; // Clear the file input
+                e.target.value = '';
                 return;
             }
-            
-            try {
-                showLoading();
-                const result = await uploadFile(file, '/api/upload-gedcom');
-                uploadedFiles.gedcom = {
-                    originalName: file.name,
-                    serverResponse: result
-                };
-                
-                // Update UI
-                gedcomFileName.textContent = file.name;
-                gedcomUploadBtn.classList.add('file-selected');
-                
-                const uploadTextElement = gedcomUploadBtn.querySelector('.upload-text');
-                if (uploadTextElement) {
-                    uploadTextElement.textContent = 'GEDCOM File Selected';
+
+            uploadedFiles.gedcom = {
+                originalName: file.name,
+                file: file
+            };
+
+            gedcomFileName.textContent = file.name;
+            gedcomUploadBtn.classList.add('file-selected');
+            const uploadTextElement = gedcomUploadBtn.querySelector('.upload-text');
+            if (uploadTextElement) {
+                uploadTextElement.textContent = 'GEDCOM File Selected';
+            }
+
+            updateFormValidation();
+
+            if (uploadedFiles.xml) {
+                const pageValidation = validatePageNumbers();
+                if (!pageValidation.isValid) {
+                    showError('❌ File Mismatch Detected\n\n' + pageValidation.message +
+                        '\n\nPlease ensure both files reference the same page and have matching base names.');
                 }
-                
-                updateFormValidation();
-                
-                // Check for page number mismatch if XML is already uploaded
-                if (uploadedFiles.xml) {
-                    const pageValidation = validatePageNumbers();
-                    if (!pageValidation.isValid) {
-                        showError('❌ File Mismatch Detected\n\n' + pageValidation.message + '\n\nPlease ensure both files reference the same page and have matching base names.');
-                        // Don't clear the file, but show the error
-                    }
-                }
-                
-                hideLoading();
-                showSuccess(`GEDCOM file "${file.name}" uploaded successfully!`);
-            } catch (error) {
-                hideLoading();
-                showError('Failed to upload GEDCOM file: ' + error.message);
             }
         }
     });
 
-    xmlFile.addEventListener('change', async function(e) {
+    xmlFile.addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (file) {
-            // Validate file extension
             if (!file.name.toLowerCase().endsWith('.xml')) {
                 showError('❌ Invalid XML File Extension\n\nXML files must have a .xml extension.\n\nExample: Tannenkirch.000.xml');
-                e.target.value = ''; // Clear the file input
+                e.target.value = '';
                 return;
             }
 
-            // Validate filename format
             const fileInfo = extractPageNumber(file.name);
             if (!fileInfo) {
                 showError('❌ Invalid XML Filename Format\n\nXML filename must follow the pattern:\nbasename.###.xml\n\nExample: Tannenkirch.000.xml\n(where 000 is the 3-digit page number)');
-                e.target.value = ''; // Clear the file input
+                e.target.value = '';
                 return;
             }
-            
-            try {
-                showLoading();
-                const result = await uploadFile(file, '/api/upload-xml');
-                uploadedFiles.xml = {
-                    originalName: file.name,
-                    serverResponse: result
-                };
-                
-                // Update UI
-                xmlFileName.textContent = file.name;
-                xmlUploadBtn.classList.add('file-selected');
-                xmlUploadBtn.querySelector('.upload-text').textContent = 'XML File Selected';
-                
-                updateFormValidation();
-                
-                // Check for page number mismatch if GEDCOM is already uploaded
-                if (uploadedFiles.gedcom) {
-                    const pageValidation = validatePageNumbers();
-                    if (!pageValidation.isValid) {
-                        showError('❌ File Mismatch Detected\n\n' + pageValidation.message + '\n\nPlease ensure both files reference the same page and have matching base names.');
-                        // Don't clear the file, but show the error
-                    }
+
+            uploadedFiles.xml = {
+                originalName: file.name,
+                file: file
+            };
+
+            xmlFileName.textContent = file.name;
+            xmlUploadBtn.classList.add('file-selected');
+            xmlUploadBtn.querySelector('.upload-text').textContent = 'XML File Selected';
+
+            updateFormValidation();
+
+            if (uploadedFiles.gedcom) {
+                const pageValidation = validatePageNumbers();
+                if (!pageValidation.isValid) {
+                    showError('❌ File Mismatch Detected\n\n' + pageValidation.message +
+                        '\n\nPlease ensure both files reference the same page and have matching base names.');
                 }
-                
-                hideLoading();
-                showSuccess(`XML file "${file.name}" uploaded successfully!`);
-            } catch (error) {
-                hideLoading();
-                showError('Failed to upload XML file: ' + error.message);
             }
         }
     });
