@@ -80,6 +80,7 @@ describe('LLMquality Server Integration Tests', function() {
             const req = http.request(options, (res) => {
                 assert.strictEqual(res.statusCode, 404,
                     '/api/upload-gedcom should be gone (404)');
+                res.resume();
                 done();
             });
             req.on('error', done);
@@ -102,6 +103,7 @@ describe('LLMquality Server Integration Tests', function() {
             const req = http.request(options, (res) => {
                 assert.strictEqual(res.statusCode, 404,
                     '/api/upload-xml should be gone (404)');
+                res.resume();
                 done();
             });
             req.on('error', done);
@@ -137,12 +139,16 @@ describe('LLMquality Server Integration Tests', function() {
                 let data = '';
                 res.on('data', chunk => { data += chunk; });
                 res.on('end', () => {
-                    assert.strictEqual(res.statusCode, 400);
-                    const json = JSON.parse(data);
-                    assert.strictEqual(json.success, false);
-                    assert.ok(json.error.includes('GEDCOM'),
-                        'Error message should mention GEDCOM');
-                    done();
+                    try {
+                        assert.strictEqual(res.statusCode, 400);
+                        const json = JSON.parse(data);
+                        assert.strictEqual(json.success, false);
+                        assert.ok(json.error.includes('GEDCOM'),
+                            'Error message should mention GEDCOM');
+                        done();
+                    } catch (err) {
+                        done(err);
+                    }
                 });
             });
             req.on('error', done);
