@@ -96,6 +96,9 @@ app.post('/api/rate', upload.fields([
             });
         }
 
+        const gedcomOriginalName = fixFilenameEncoding(gedcomFile.originalname);
+        const xmlOriginalName = fixFilenameEncoding(xmlFile.originalname);
+
         // Function to extract location from filename (basename without page number and extension)
         function extractLocationFromFilename(originalName) {
             if (!originalName) return '';
@@ -115,8 +118,7 @@ app.post('/api/rate', upload.fields([
             const gedReader = new GedReader();
             const gedModel = gedReader.read(gedcomFile.path);
             gedPageModel = gedModel.toPageModel();
-            gedPageModel.location = extractLocationFromFilename(
-                fixFilenameEncoding(gedcomFile.originalname));
+            gedPageModel.location = extractLocationFromFilename(gedcomOriginalName);
         } catch (error) {
             console.error('Error processing GEDCOM file:', error);
             return res.status(500).json({
@@ -131,8 +133,7 @@ app.post('/api/rate', upload.fields([
             const xmlReader = new XmlReader();
             const xmlModel = await xmlReader.readXml(xmlFile.path);
             xmlPageModel = xmlModel.toPageModel();
-            xmlPageModel.location = extractLocationFromFilename(
-                fixFilenameEncoding(xmlFile.originalname));
+            xmlPageModel.location = extractLocationFromFilename(xmlOriginalName);
         } catch (error) {
             console.error('Error processing XML file:', error);
             return res.status(500).json({
@@ -158,8 +159,8 @@ app.post('/api/rate', upload.fields([
 
         // Compare the models and generate results
         const results = await compareModels(gedPageModel, xmlPageModel, {
-            gedcomFile: fixFilenameEncoding(gedcomFile.originalname),
-            xmlFile: fixFilenameEncoding(xmlFile.originalname)
+            gedcomFile: gedcomOriginalName,
+            xmlFile: xmlOriginalName
         });
 
         res.json({
@@ -663,8 +664,6 @@ function cleanupFiles(gedcomPath, xmlPath) {
         console.error('Error cleaning up files:', error);
     }
 }
-
-// Remove old configuration and other endpoints since we no longer need them
 
 // Error handling middleware
 app.use((error, req, res, next) => {
