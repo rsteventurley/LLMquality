@@ -449,6 +449,23 @@ class CompareModels {
     }
 
     /**
+     * Normalize a cross-reference by stripping the person-number suffix.
+     * An LLM may return "1414.7" to mean the 7th person in entry 1414, but
+     * the GEDCOM file only stores the entry number "1414". Stripping the suffix
+     * lets both forms compare equal.
+     * @param {string} ref - The reference string to normalize
+     * @returns {string} The reference with any ".N" person-number suffix removed
+     * @private
+     */
+    _normalizeReference(ref) {
+        // Only strip the suffix when the entire ref is "digits.digits"
+        if (/^\d+\.\d+$/.test(ref)) {
+            return ref.split('.')[0];
+        }
+        return ref;
+    }
+
+    /**
      * Check if two people have compatible birth dates (not too far apart)
      * @param {PersonModel} person1 - First person to compare
      * @param {PersonModel} person2 - Second person to compare
@@ -483,7 +500,8 @@ class CompareModels {
         const refs2 = person2.references || [];
         
         for (const ref1 of refs1) {
-            if (refs2.includes(ref1)) {
+            const normalized1 = this._normalizeReference(ref1);
+            if (refs2.some(ref2 => this._normalizeReference(ref2) === normalized1)) {
                 return true; // Found matching reference
             }
         }
@@ -688,11 +706,17 @@ class CompareModels {
         const refs1 = person1.references || [];
         const refs2 = person2.references || [];
 
+        const normalizedRefs1 = refs1.map(ref => this._normalizeReference(ref));
+        const normalizedRefs2 = refs2.map(ref => this._normalizeReference(ref));
+
         // Check if the number of references differs (recall error)
-        if (refs1.length !== refs2.length) {
-            const missingRefs = refs1.length > refs2.length 
-                ? refs1.filter(ref => !refs2.includes(ref))
-                : refs2.filter(ref => !refs1.includes(ref));
+        if (normalizedRefs1.length !== normalizedRefs2.length) {
+            const normalizedRefs2Set = new Set(normalizedRefs2);
+            const normalizedRefs1Set = new Set(normalizedRefs1);
+
+            const missingRefs = normalizedRefs1.length > normalizedRefs2.length
+                ? refs1.filter((ref, i) => !normalizedRefs2Set.has(normalizedRefs1[i]))
+                : refs2.filter((ref, i) => !normalizedRefs1Set.has(normalizedRefs2[i]));
 
             return {
                 type: 'recall',
@@ -708,13 +732,13 @@ class CompareModels {
             };
         }
 
-        // If counts match, check if the actual references are the same (precision error)
-        if (refs1.length > 0 && refs2.length > 0) {
-            const refs1Set = new Set(refs1);
-            const refs2Set = new Set(refs2);
-            
-            const differentRefs1 = refs1.filter(ref => !refs2Set.has(ref));
-            const differentRefs2 = refs2.filter(ref => !refs1Set.has(ref));
+        // If counts match, check if the actual normalized references are the same (precision error)
+        if (normalizedRefs1.length > 0 && normalizedRefs2.length > 0) {
+            const normalizedRefs1Set = new Set(normalizedRefs1);
+            const normalizedRefs2Set = new Set(normalizedRefs2);
+
+            const differentRefs1 = refs1.filter((ref, i) => !normalizedRefs2Set.has(normalizedRefs1[i]));
+            const differentRefs2 = refs2.filter((ref, i) => !normalizedRefs1Set.has(normalizedRefs2[i]));
 
             if (differentRefs1.length > 0 || differentRefs2.length > 0) {
                 return {

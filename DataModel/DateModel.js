@@ -269,22 +269,41 @@ class DateModel {
             this.month = month;
             this.day = day;
         }
+        // Match MMM YYYY format (e.g., "SEP 1872") — month known, day unknown
+        else if (dateString.match(/^([A-Z]{3})\s+(\d{4})$/)) {
+            const monthYearMatch = dateString.match(/^([A-Z]{3})\s+(\d{4})$/);
+            const monthName = monthYearMatch[1];
+            const year = parseInt(monthYearMatch[2], 10);
+
+            const month = monthNames[monthName];
+            if (!month) {
+                throw new Error(`Invalid month name: ${monthName}`);
+            }
+
+            if (year < 1400 || year > 2100) {
+                throw new Error(`Year must be between 1400 and 2100, got ${year}`);
+            }
+
+            this.year = year;
+            this.month = month;
+            this.day = null;
+        }
         // Match YYYY only format (e.g., "1850")
         else {
             const yearMatch = dateString.match(/^(\d{4})$/);
             if (yearMatch) {
                 const year = parseInt(yearMatch[1], 10);
-                
+
                 // Validate year range
                 if (year < 1400 || year > 2100) {
                     throw new Error(`Year must be between 1400 and 2100, got ${year}`);
                 }
-                
+
                 this.year = year;
                 this.month = null;
                 this.day = null;
             } else {
-                throw new Error(`Invalid GEDCOM date format: ${dateString}. Expected DD MMM YYYY or YYYY.`);
+                throw new Error(`Invalid GEDCOM date format: ${dateString}. Expected DD MMM YYYY, MMM YYYY, or YYYY.`);
             }
         }
     }

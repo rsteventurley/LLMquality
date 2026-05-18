@@ -112,10 +112,19 @@ class XmlEvent {
         let dateModel = new DateModel();
         if (!this.date.isEmpty()) {
             try {
-                // Try to parse the standardized date first (YYYYMMDD format)
+                // Try to parse the standardized date first (YYYYMMDD or QUALIFIER YYYYMMDD format)
                 if (this.date.std) {
                     const std = this.date.std;
-                    if (std.length === 8) {
+                    // Handle qualified std: "ABT 18160000", "BEF 18160000", "AFT 18160000"
+                    const qualifiedMatch = std.match(/^(ABT|BEF|AFT) (\d{8})$/);
+                    if (qualifiedMatch) {
+                        const qualifier = qualifiedMatch[1];
+                        const digits = qualifiedMatch[2];
+                        const year = digits.substring(0, 4);
+                        const month = digits.substring(4, 6);
+                        const day = digits.substring(6, 8);
+                        dateModel.parseDateString(`${qualifier} ${year}-${month}-${day}`);
+                    } else if (std.length === 8 && /^\d{8}$/.test(std)) {
                         const year = std.substring(0, 4);
                         const month = std.substring(4, 6);
                         const day = std.substring(6, 8);
