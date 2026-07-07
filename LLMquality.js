@@ -11,6 +11,8 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const os = require('os');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,7 +30,22 @@ const upload = multer({
     }
 });
 
+const uploadLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    message: { success: false, error: 'Too many requests, please try again later.' }
+});
+
 // Middleware
+app.use(helmet({
+    contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+            upgradeInsecureRequests: null
+        }
+    }
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -75,7 +92,7 @@ function fixFilenameEncoding(filename) {
 }
 
 // API route to handle rating submission
-app.post('/api/rate', upload.fields([
+app.post('/api/rate', uploadLimiter, upload.fields([
     { name: 'gedcom', maxCount: 1 },
     { name: 'xml', maxCount: 1 }
 ]), async (req, res) => {
